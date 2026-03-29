@@ -3,25 +3,220 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>QUIC CDN Demo</title>
     <style>
-        *{
-            border: 0;
+        :root {
+            --bg: #f4efe5;
+            --panel: rgba(255, 252, 247, 0.86);
+            --ink: #15231a;
+            --muted: #536357;
+            --accent: #1e7f5c;
+            --accent-strong: #114d38;
+            --line: rgba(21, 35, 26, 0.12);
+            --shadow: 0 24px 80px rgba(17, 42, 30, 0.16);
+        }
+
+        * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Trebuchet MS', 'Lucida Sans Unicode', 'Lucida Grande', 'Lucida Sans', Arial, sans-serif;
-        
         }
-        body{
-            background-color: rgb(83, 83, 83);
+
+        body {
+            min-height: 100vh;
+            font-family: Georgia, "Times New Roman", serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at top left, rgba(30, 127, 92, 0.18), transparent 34%),
+                radial-gradient(circle at bottom right, rgba(157, 111, 45, 0.22), transparent 30%),
+                linear-gradient(135deg, #ebe2d2, var(--bg));
+            padding: 32px 20px 48px;
+        }
+
+        main {
+            max-width: 1080px;
+            margin: 0 auto;
+            display: grid;
+            gap: 20px;
+        }
+
+        .hero, .panel {
+            background: var(--panel);
+            backdrop-filter: blur(14px);
+            border: 1px solid var(--line);
+            border-radius: 28px;
+            box-shadow: var(--shadow);
+        }
+
+        .hero {
+            padding: 28px;
+            display: grid;
+            gap: 18px;
+        }
+
+        .eyebrow {
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            font-size: 0.8rem;
+            color: var(--accent-strong);
+        }
+
+        h1 {
+            font-size: clamp(2.4rem, 6vw, 4.8rem);
+            line-height: 0.95;
+            max-width: 10ch;
+        }
+
+        .lede {
+            max-width: 60ch;
+            color: var(--muted);
+            font-size: 1.05rem;
+            line-height: 1.7;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        .panel {
+            padding: 24px;
+            display: grid;
+            gap: 16px;
+        }
+
+        h2 {
+            font-size: 1.45rem;
+        }
+
+        p, li, code, pre {
+            line-height: 1.6;
+        }
+
+        ul {
+            padding-left: 18px;
+            color: var(--muted);
+        }
+
+        .media-shell {
+            border-radius: 22px;
+            overflow: hidden;
+            background: #0d1711;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        video {
+            width: 100%;
+            display: block;
+            background: #000;
+            aspect-ratio: 16 / 9;
+        }
+
+        .notice {
+            padding: 12px 14px;
+            border-radius: 16px;
+            background: rgba(30, 127, 92, 0.08);
+            color: var(--accent-strong);
+            font-size: 0.95rem;
+        }
+
+        a {
+            color: var(--accent-strong);
+        }
+
+        .links {
             display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .links a {
+            text-decoration: none;
+            border: 1px solid rgba(17, 77, 56, 0.18);
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        pre {
+            background: rgba(21, 35, 26, 0.95);
+            color: #f8f0df;
+            border-radius: 18px;
+            padding: 14px;
+            overflow: auto;
+            font-size: 0.92rem;
+        }
+
+        @media (max-width: 640px) {
+            body {
+                padding: 18px 14px 32px;
+            }
+
+            .hero, .panel {
+                border-radius: 22px;
+                padding: 20px;
+            }
         }
     </style>
 </head>
 <body>
-    <h1>Hello World</h1>
+    <main>
+        <section class="hero">
+            <p class="eyebrow">HTTP/3 + QUIC Demo</p>
+            <h1>Simple CDN with caching, range forwarding, and HLS delivery.</h1>
+            <p class="lede">
+                This page is served by the origin. The CDN in front of it fetches over HTTP/3,
+                caches normal GET requests, forwards range requests directly to the origin, and
+                can deliver the sample HLS stream under <code>/hls/stream.m3u8</code>.
+            </p>
+            <div class="links">
+                <a href="/hls/stream.m3u8">Open HLS playlist</a>
+                <a href="/hello">Origin hello endpoint</a>
+            </div>
+        </section>
+
+        <section class="grid">
+            <article class="panel">
+                <h2>HLS Sample</h2>
+                <div class="media-shell">
+                    <video id="player" controls playsinline muted></video>
+                </div>
+                <div class="notice" id="status">
+                    Attempting native HLS playback. If your browser does not support it, open the playlist link directly or test through Safari / a native HLS-capable player.
+                </div>
+            </article>
+
+            <article class="panel">
+                <h2>What To Verify</h2>
+                <ul>
+                    <li>Request the same page twice through the CDN and inspect the <code>X-Cache</code> header: first <code>MISS</code>, then <code>HIT</code>.</li>
+                    <li>Fetch an HLS segment with a <code>Range</code> header and confirm it stays a cache <code>MISS</code>.</li>
+                    <li>Watch the QUIC migration demo separately while changing the client IP and observe that the same connection survives.</li>
+                </ul>
+            </article>
+
+            <article class="panel">
+                <h2>Useful Paths</h2>
+                <pre>/
+/hello
+/hls/stream.m3u8
+/hls/segment000.ts</pre>
+            </article>
+        </section>
+    </main>
+
+    <script>
+        const player = document.getElementById("player");
+        const status = document.getElementById("status");
+        const playlist = "/hls/stream.m3u8";
+
+        if (player.canPlayType("application/vnd.apple.mpegurl")) {
+            player.src = playlist;
+            status.textContent = "Native HLS playback is available in this browser.";
+        } else {
+            status.textContent = "This browser does not expose native HLS playback. The playlist and segments are still available for CDN testing.";
+        }
+    </script>
 </body>
 </html>

@@ -1,0 +1,10 @@
+int this project we, implemented a simple model cdn, that supports http3,
+to illustrate the adavntages of quic, 
+the cdn, does cacheing, internal paging.
+        supports hls streaming,
+we also iluustrated another, advantage of quic which is connection  migration,
+even if the ip of host changes, quic keeps the connection  as it is,
+
+in the cdn we served a static website and stramed a sample hls stream, to test the performance diffrence between http2 and 3,
+connection migration is tested seperately.
+

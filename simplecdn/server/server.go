@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/tls"
 	"log"
+	"mime"
 	"net/http"
 	"os"
 	"path"
@@ -43,21 +44,7 @@ func (nfs neuteredFileSystem) Open(name string) (http.File, error) {
 }
 
 func main() {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("hello world"))
-	})
-	staticDir := "."
-	fileServer := http.FileServer(neuteredFileSystem{
-		fs: http.Dir(staticDir),
-		blocked: map[string]struct{}{
-			"server.key": {},
-			"server.crt": {},
-		},
-	})
-	mux.Handle("/", fileServer)
-
-	logged := accessLog(mux)
+	logged := accessLog(newOriginMux("."))
 
 	h3 := &http3.Server{
 		Addr:    ":443",
@@ -95,6 +82,25 @@ func main() {
 	log.Fatal(tcpServer.ListenAndServeTLS(certFile, keyFile))
 }
 
+func newOriginMux(staticDir string) *http.ServeMux {
+	_ = mime.AddExtensionType(".m3u8", "application/vnd.apple.mpegurl")
+	_ = mime.AddExtensionType(".ts", "video/mp2t")
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("hello world"))
+	})
+	fileServer := http.FileServer(neuteredFileSystem{
+		fs: http.Dir(staticDir),
+		blocked: map[string]struct{}{
+			"server.key": {},
+			"server.crt": {},
+		},
+	})
+	mux.Handle("/", fileServer)
+	return mux
+}
+
 type loggingResponseWriter struct {
 	http.ResponseWriter
 	status int
@@ -118,12 +124,12 @@ func (lrw *loggingResponseWriter) Write(p []byte) (int, error) {
 func accessLog(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
-	lrw := &loggingResponseWriter{ResponseWriter: w}
-	next.ServeHTTP(lrw, r)
-	if lrw.status == 0 {
-		lrw.status = http.StatusOK
-	}
-	latency := time.Since(start)
+		lrw := &loggingResponseWriter{ResponseWriter: w}
+		next.ServeHTTP(lrw, r)
+		if lrw.status == 0 {
+			lrw.status = http.StatusOK
+		}
+		latency := time.Since(start)
 		remote := r.RemoteAddr
 		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
 			remote = forwarded

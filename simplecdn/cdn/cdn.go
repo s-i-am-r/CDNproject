@@ -141,8 +141,37 @@ func main() {
 		}
 	}()
 	client := &http.Client{Transport: originRT}
+	handler := newCDNHandler(client, originURL, cache, *maxEntryBytes)
 
-	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h3 := &http3.Server{
+		Addr:    *addr,
+		Handler: accessLog(handler),
+	}
+
+	hh := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if err := h3.SetQUICHeaders(w.Header()); err != nil {
+				log.Println(err)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	server := &http.Server{
+		Addr:      *addr,
+		Handler:   hh(accessLog(handler)),
+		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, NextProtos: []string{"h3"}},
+	}
+
+	log.Printf("cdn listening on %s (origin %s)", *addr, originURL.String())
+	go func() {
+		log.Fatal(h3.ListenAndServeTLS(*certFile, *keyFile))
+	}()
+	log.Fatal(server.ListenAndServeTLS(*certFile, *keyFile))
+}
+
+func newCDNHandler(client *http.Client, originURL *url.URL, cache *lruCache, maxEntryBytes int64) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			proxyPass(w, r, client, originURL)
 			return
@@ -194,7 +223,7 @@ func main() {
 			}
 		}
 
-		if contentLength < 0 || contentLength > *maxEntryBytes {
+		if contentLength < 0 || contentLength > maxEntryBytes {
 			copyHeaders(w.Header(), resp.Header)
 			w.Header().Set("X-Cache", "MISS")
 			w.WriteHeader(resp.StatusCode)
@@ -227,32 +256,6 @@ func main() {
 			_, _ = w.Write(entry.body)
 		}
 	})
-
-	h3 := &http3.Server{
-		Addr:    *addr,
-		Handler: accessLog(handler),
-	}
-
-	hh := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if err := h3.SetQUICHeaders(w.Header()); err != nil {
-				log.Println(err)
-			}
-			next.ServeHTTP(w, r)
-		})
-	}
-
-	server := &http.Server{
-		Addr:      *addr,
-		Handler:   hh(accessLog(handler)),
-		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, NextProtos: []string{"h3"}},
-	}
-
-	log.Printf("cdn listening on %s (origin %s)", *addr, originURL.String())
-	go func() {
-		log.Fatal(h3.ListenAndServeTLS(*certFile, *keyFile))
-	}()
-	log.Fatal(server.ListenAndServeTLS(*certFile, *keyFile))
 }
 
 func proxyPass(w http.ResponseWriter, r *http.Request, client *http.Client, originURL *url.URL) {
